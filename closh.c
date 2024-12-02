@@ -21,7 +21,9 @@
 #define MAX_LINE		80 /* 80 chars per line, per command */
 
 void cd(char directory[30],int count){
-	chdir(directory);
+	if(chdir(directory) != 0){
+		perror("Error changing directory");
+	}
 }
 
 void md(char directory[30]){
@@ -29,7 +31,9 @@ void md(char directory[30]){
 }
 
 void rd(char directory[30]){
-	rmdir(directory);
+	if(rmdir(directory) != 0){
+		perror("Error removing directory");
+	}
 }
 
 void builtIn(char cmd[30]){
@@ -74,7 +78,9 @@ void external_cmd(char entradas[11][50],int count,bool redirect){
 		return 1;
 	}
 	if(pid == 0){
-		execvp(args[0], args);
+		if(execvp(args[0], args) == -1){
+			perror("Error executing");	
+		}
 	}
 	if(pid > 0){
 		bool bg_mode = (entradas[count - 1][strlen(entradas[count - 1])-1]=='&');
