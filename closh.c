@@ -1,24 +1,23 @@
 /**
-
  * Simple shell interface program.
-
  *
-
  * Operating System Concepts - Tenth Edition
-
  * Copyright John Wiley & Sons - 2018
-
  *
-
  * Modified by Ilker Demirkol
-
  */
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #define MAX_LINE		80 /* 80 chars per line, per command */
+#define BUFFER_SIZE 100
+#define READ_END	0
+#define WRITE_END	1
 
 void cd(char directory[30],int count){
 	if(chdir(directory) != 0){
@@ -51,10 +50,11 @@ void builtIn(char cmd[30]){
 	}
 	else {
 		printf("%s is external \n",cmd);
-	}
+	}	
 }
 
 void external_cmd(char entradas[11][50],int count,bool redirect){
+	printf("\n");
 	pid_t pid;
 	pid = fork();
 	char *args[10 + 2];
@@ -102,25 +102,64 @@ int main(void)
     		getcwd(directory, sizeof(directory));
     		printf(directory);
         	printf(">");
-        	//get command
         	char entrada[100];
         	char entradas[11][50];
 	    	int count;
 	    	FILE *fp;
 	    	FILE *original_stdout_fd = dup(STDOUT_FILENO);
-    		fgets(entrada, sizeof(entrada), stdin);
-    		//FILE *file = fopen("input.txt", "r");
-    		//fgets(entrada, sizeof(entrada), file);
-    		//fclose(file);
-    		count = sscanf(entrada, "%s %s %s %s %s %s %s %s %s %s %s", &entradas[0], &entradas[1], &entradas[2], &entradas[3], &entradas[4], &entradas[5], &entradas[6], &entradas[7], &entradas[8], &entradas[9], &entradas[10]);
+	    	FILE *original_stdin_fd = dup(STDIN_FILENO);	
+			fgets(entrada, sizeof(entrada), stdin);
+			int pipe_position = -1;
+			bool pipe_flag=false;
+			for(int i = 0; i < 100; i++)
+			{
+				if(entrada[i] == '='){
+					pipe_position = i;
+				}
+			}
+    		pid_t pid;
+			int fd[2];
+			pipe(fd);
+			char msg[20];
+    		if(pipe_position != -1)
+    		{
+    			pid = fork();
+    			if (pid > 0) 
+    			{  	
+					close(fd[WRITE_END]);
+					read(fd[READ_END], msg, 20);
+					int size_input = strlen(entrada) - 1;
+					char ent[100];
+					int cont_temp = 0;
+					for(int i = 0; i < size_input - pipe_position - 1;i++)
+					{
+						ent[i] = entrada[pipe_position + 1 + i];
+						cont_temp++;
+					}
+					dup2(fd[READ_END], STDIN_FILENO);
+					for(int i = 0; i < strlen(ent);i++)
+					{
+						entrada[i] = ent[i];
+					}
+					entrada[strlen(ent)] = '\0';
+				}
+			else 
+			{
+				entrada[pipe_position] = '\0';
+				close(fd[READ_END]);
+				dup2(fd[WRITE_END], STDOUT_FILENO);
+				pipe_flag = true;
+			}
+    	}
+    	count = sscanf(entrada, "%s %s %s %s %s %s %s %s %s %s %s", &entradas[0], &entradas[1], &entradas[2], &entradas[3], &entradas[4], &entradas[5], &entradas[6], &entradas[7], &entradas[8], &entradas[9], &entradas[10]);    		
 		bool flag = false;
 		bool redirect = false;
-		if(strcmp(entradas[count - 2],"~") == 0){
+		if(strcmp(entradas[count - 2],"~") == 0)
+		{
 			redirect = true;
 			fp = fopen(entradas[count - 1], "w");
 			dup2(fileno(fp), STDOUT_FILENO);
 		}
-		//process command
         	if(strcmp(entradas[0],"cd") == 0){
         		if(count == 1){
 					cd("/home",count);
@@ -153,6 +192,12 @@ int main(void)
 				fclose(fp);
 				close(original_stdout_fd);
         	}
+        	if(pipe_flag){
+        		close(fd[WRITE_END]);
+        		return 0;
+        	}
+        	close(fd[READ_END]);
+        	dup2(original_stdin_fd, STDIN_FILENO);
     	}
 	return 0;
 }
